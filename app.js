@@ -9,7 +9,7 @@ import("https://esm.run/@google/genai").then(module => {
 });
 
 // --- 定数 ---
-const DB_NAME = 'GeminiPWA_DB';
+const DB_NAME = 'GeminiPWA_DB2';
 const DB_VERSION = 12; 
 const SETTINGS_STORE = 'settings';
 const PROFILES_STORE = 'profiles';
