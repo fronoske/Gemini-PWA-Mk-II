@@ -693,6 +693,22 @@
                         <input type="checkbox" id="enable-summary-button-toggle">
                         チャット画面に要約ボタンを表示する
                     </label>
+                    <label for="summary-model-name">要約用モデル名:</label>
+                    <select id="summary-model-name" aria-label="要約用モデル名">
+                        <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                        <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                        <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+                        <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                        <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+                        <optgroup label="プレビュー版">
+                            <option value="gemini-2.5-flash-preview-09-2025">gemini-2.5-flash-preview-09-2025</option>
+                            <option value="gemini-2.5-flash-lite-preview-09-2025">gemini-2.5-flash-lite-preview-09-2025</option>
+                            <option value="gemini-2.5-flash-image-preview">gemini-2.5-flash-image-preview (Nano Banana)</option>
+                            <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
+                        </optgroup>
+                        <optgroup label="ユーザー指定" id="summary-user-models">
+                        </optgroup>
+                    </select>
                     <label for="summary-system-prompt">要約実行時のシステムプロンプト:</label>
                     <textarea id="summary-system-prompt" placeholder="要約を実行するAIへの指示を入力します。" aria-label="要約実行時のシステムプロンプト"></textarea>
                 </div>
