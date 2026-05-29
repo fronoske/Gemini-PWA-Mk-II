@@ -1,0 +1,4 @@
+# Local npm artifacts for this static app
+node_modules/
+package.json
+package-lock.json
