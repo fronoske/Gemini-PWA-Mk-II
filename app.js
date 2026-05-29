@@ -47,12 +47,11 @@ const GEMINI_MODELS = [
     { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro' },
     { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash' },
     { value: 'gemini-2.5-flash-lite', label: 'gemini-2.5-flash-lite' },
-    { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash' },
-    { value: 'gemini-2.0-flash-lite', label: 'gemini-2.0-flash-lite' },
-    { value: 'gemini-2.5-flash-preview-09-2025', label: 'gemini-2.5-flash-preview-09-2025', group: 'プレビュー版' },
-    { value: 'gemini-2.5-flash-lite-preview-09-2025', label: 'gemini-2.5-flash-lite-preview-09-2025', group: 'プレビュー版' },
-    { value: 'gemini-2.5-flash-image-preview', label: 'gemini-2.5-flash-image-preview (Nano Banana)', group: 'プレビュー版' },
-    { value: 'gemini-3-pro-preview', label: 'gemini-3-pro-preview', group: 'プレビュー版' }
+    { value: 'gemini-3-pro-preview', label: 'gemini-3-pro-preview', group: 'プレビュー版' },
+    { value: 'gemini-3.1-pro-preview', label: 'gemini-3.1-pro-preview', group: 'プレビュー版' },
+    { value: 'gemini-3.5-flash', label: 'gemini-3.5-flash', group: 'プレビュー版' },
+    { value: 'gemini-3-flash-preview', label: 'gemini-3-flash-preview', group: 'プレビュー版' },
+    { value: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite', group: 'プレビュー版' }
 ];
 
 const ZAI_MODELS = [
