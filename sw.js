@@ -1,6 +1,8 @@
 // sw.js
 
-const CACHE_NAME = 'gemini-pwa-cache-v1.12'; // 更新後はここも変更
+const CACHE_PREFIX = 'gemini-pwa-mkii-cache-';
+const LEGACY_CACHE_NAMES = ['gemini-pwa-cache-v1.12'];
+const CACHE_NAME = `${CACHE_PREFIX}v1.12`; // 更新後はここも変更
 const urlsToCache = [
   './',
   './index.html',
@@ -86,12 +88,12 @@ self.addEventListener('fetch', (event) => {
 
 // activateイベントで古いキャッシュを削除 & クライアント制御の要求
 self.addEventListener('activate', (event) => {
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
+          const isOwnCache = cacheName.startsWith(CACHE_PREFIX) || LEGACY_CACHE_NAMES.includes(cacheName);
+          if (isOwnCache && cacheName !== CACHE_NAME) {
             console.log('SW: Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
@@ -113,7 +115,10 @@ self.addEventListener('message', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          return caches.delete(cacheName);
+          if (cacheName.startsWith(CACHE_PREFIX) || LEGACY_CACHE_NAMES.includes(cacheName)) {
+            return caches.delete(cacheName);
+          }
+          return Promise.resolve(false);
         })
       );
     }).then(() => {

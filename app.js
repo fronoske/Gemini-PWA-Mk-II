@@ -9,7 +9,7 @@ import("https://esm.run/@google/genai").then(module => {
 });
 
 // --- 定数 ---
-const DB_NAME = 'GeminiPWA_DB';
+const DB_NAME = 'GeminiPWA_MkII_DB';
 const DB_VERSION = 13; 
 const SETTINGS_STORE = 'settings';
 const PROFILES_STORE = 'profiles';
@@ -35,9 +35,12 @@ const DARK_THEME_COLOR = '#007aff';
 const APP_VERSION = "1.12";
 const DEFAULT_ZAI_MODEL = 'glm-4.6';
 const DEFAULT_OPENROUTER_MODEL = 'x-ai/grok-4.1-fast';
-const VERSION_NOTICE_SESSION_KEY = 'pendingVersionNotice';
-const VERSION_ACK_STORAGE_KEY = 'appVersionAcknowledged';
-const VERSION_LEGACY_STORAGE_KEY = 'appVersion';
+const VERSION_NOTICE_SESSION_KEY = 'GeminiPWA_MkII_pendingVersionNotice';
+const VERSION_ACK_STORAGE_KEY = 'GeminiPWA_MkII_appVersionAcknowledged';
+const VERSION_LEGACY_STORAGE_KEY = 'GeminiPWA_MkII_appVersion';
+const RELOAD_ATTEMPT_SESSION_KEY = 'GeminiPWA_MkII_reloadAttempted';
+const SYNC_RELOAD_SESSION_KEY = 'GeminiPWA_MkII_isSyncReload';
+const DROPBOX_CODE_VERIFIER_SESSION_KEY = 'GeminiPWA_MkII_dropboxCodeVerifier';
 
 // プロバイダーごとのモデルリスト
 const GEMINI_MODELS = [
@@ -480,13 +483,13 @@ try {
     document.body.classList.toggle('dropbox-connected', false);
 } catch (error) {
     console.error("起動時エラー:", error);
-    if (sessionStorage.getItem('reloadAttempted') !== 'true') {
+    if (sessionStorage.getItem(RELOAD_ATTEMPT_SESSION_KEY) !== 'true') {
         console.log("初回エラーのため、強制リロードを試みます...");
-        sessionStorage.setItem('reloadAttempted', 'true');
+        sessionStorage.setItem(RELOAD_ATTEMPT_SESSION_KEY, 'true');
         location.reload(true);
     } else {
         console.error("リロード後もエラーが解決しなかったため、処理を停止します。");
-        sessionStorage.removeItem('reloadAttempted');
+        sessionStorage.removeItem(RELOAD_ATTEMPT_SESSION_KEY);
         document.body.innerHTML = `<div style="padding: 20px; text-align: center; color: red;">
             <h1>アプリケーションの起動に失敗しました</h1>
             <p>エラー: ${error.message}</p>
@@ -5727,7 +5730,7 @@ const appLogic = {
     // アプリ初期化
     async initializeApp() {
         // isSyncReloadフラグはメッセージの切り替えにのみ使用
-        const isSyncReload = sessionStorage.getItem('isSyncReload') === 'true';
+        const isSyncReload = sessionStorage.getItem(SYNC_RELOAD_SESSION_KEY) === 'true';
         // 条件分岐の外で必ずダイアログを表示する
         uiUtils.showProgressDialog(isSyncReload ? 'データベースを準備中...' : '初期化処理を開始中...');
 
@@ -5872,7 +5875,7 @@ const appLogic = {
                 uiUtils.showProgressDialog('Dropboxと連携中...');
                 try {
                     const REDIRECT_URI = window.location.origin + window.location.pathname;
-                    const codeVerifier = sessionStorage.getItem('dropboxCodeVerifier');
+                    const codeVerifier = sessionStorage.getItem(DROPBOX_CODE_VERIFIER_SESSION_KEY);
     
                     if (!codeVerifier) {
                         throw new Error("認証セッションが見つかりません。もう一度お試しください。");
@@ -5894,7 +5897,7 @@ const appLogic = {
                     uiUtils.hideProgressDialog();
                     await uiUtils.showCustomAlert(`連携に失敗しました: ${error.message}`);
                 } finally {
-                    sessionStorage.removeItem('dropboxCodeVerifier');
+                    sessionStorage.removeItem(DROPBOX_CODE_VERIFIER_SESSION_KEY);
                 }
             }
         };
@@ -6096,7 +6099,7 @@ const appLogic = {
             
             // finallyブロックで必ずダイアログを閉じる
             uiUtils.hideProgressDialog();
-            sessionStorage.removeItem('isSyncReload');
+            sessionStorage.removeItem(SYNC_RELOAD_SESSION_KEY);
 
             if (versionNoticeData && versionNoticeData.message) {
                 try {
@@ -6528,7 +6531,7 @@ const appLogic = {
                 }
 
                 await uiUtils.showCustomAlert(finalMessage);
-                sessionStorage.setItem('isSyncReload', 'true'); // リロード後の処理のためにフラグを立てる
+                sessionStorage.setItem(SYNC_RELOAD_SESSION_KEY, 'true'); // リロード後の処理のためにフラグを立てる
                 window.location.reload();
 
             } else {
@@ -7208,7 +7211,7 @@ const appLogic = {
                 const codeChallenge = await appLogic._generateCodeChallenge(codeVerifier);
 
                 // 次のステップでトークンを取得するためにverifierを保存
-                sessionStorage.setItem('dropboxCodeVerifier', codeVerifier);
+                sessionStorage.setItem(DROPBOX_CODE_VERIFIER_SESSION_KEY, codeVerifier);
 
                 const authUrl = `https://www.dropbox.com/oauth2/authorize?client_id=${APP_KEY}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&token_access_type=offline&code_challenge=${codeChallenge}&code_challenge_method=S256`;
 

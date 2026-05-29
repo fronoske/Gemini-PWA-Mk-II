@@ -1,6 +1,6 @@
 {
-  "name": "GeminiPWA",
-  "short_name": "GeminiPWA",
+  "name": "Gemini PWA Mk-II",
+  "short_name": "Gemini Mk-II",
   "description": "Chat with Gemini and save history.",
   "start_url": "./index.html",
   "display": "standalone",
