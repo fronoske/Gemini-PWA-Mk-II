@@ -1,8 +1,8 @@
 // sw.js
 
 const CACHE_PREFIX = 'gemini-pwa-mkii-cache-';
-const LEGACY_CACHE_NAMES = ['gemini-pwa-cache-v1.12'];
-const CACHE_NAME = `${CACHE_PREFIX}v1.12`; // 更新後はここも変更
+const LEGACY_CACHE_NAMES = ['gemini-pwa-cache-v1.12', 'gemini-pwa-mkii-cache-v1.12'];
+const CACHE_NAME = `${CACHE_PREFIX}2026.05.30-fronoske`; // 更新後はここも変更
 const urlsToCache = [
   './',
   './index.html',
