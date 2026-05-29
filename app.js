@@ -4657,6 +4657,85 @@ function updateCurrentSystemPrompt() {
 const appLogic = {
     _setupEventListenersCallCount: 0,
 
+    setupInputPresetPopup() {
+        const textarea = elements.userInput;
+        const popup = document.getElementById('input-preset-popup');
+        if (!textarea || !popup || popup.dataset.initialized === 'true') return;
+
+        const presetList = [
+            { label: '続', value: '（続けて）', autoSend: true },
+            { label: '展', value: '（【今後の展開】）', autoSend: false, moveCursorLeft: 1 },
+        ];
+
+        const hidePopup = () => {
+            popup.style.display = 'none';
+            popup.style.opacity = 0;
+        };
+
+        const showPopup = () => {
+            const rect = textarea.getBoundingClientRect();
+            popup.style.display = 'flex';
+            popup.style.left = `${window.scrollX + rect.left}px`;
+            popup.style.top = `${window.scrollY + rect.top - popup.offsetHeight - 8}px`;
+            popup.style.opacity = 1;
+        };
+
+        const insertAtCursor = (target, text, moveLeft = 0) => {
+            const start = target.selectionStart;
+            const end = target.selectionEnd;
+            const before = target.value.substring(0, start);
+            const after = target.value.substring(end);
+            target.value = before + text + after;
+
+            const newPos = Math.max(before.length + text.length - moveLeft, 0);
+            target.setSelectionRange(newPos, newPos);
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+
+        popup.style.display = 'none';
+        popup.style.position = 'absolute';
+        popup.style.flexDirection = 'row';
+        popup.innerHTML = '';
+
+        presetList.forEach((preset) => {
+            const button = document.createElement('button');
+            button.textContent = preset.label;
+            button.type = 'button';
+            button.tabIndex = -1;
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                insertAtCursor(textarea, preset.value, preset.moveCursorLeft || 0);
+                hidePopup();
+                textarea.focus();
+                if (preset.autoSend) {
+                    setTimeout(() => {
+                        elements.sendButton?.click();
+                    }, 50);
+                }
+            });
+            popup.appendChild(button);
+        });
+
+        textarea.addEventListener('focus', () => {
+            if (textarea.value.trim() === '') showPopup();
+        });
+        textarea.addEventListener('input', () => {
+            if (textarea.value.trim() === '') {
+                showPopup();
+            } else {
+                hidePopup();
+            }
+        });
+        textarea.addEventListener('blur', () => {
+            setTimeout(hidePopup, 160);
+        });
+        window.addEventListener('resize', () => {
+            if (popup.style.display === 'flex') showPopup();
+        });
+
+        popup.dataset.initialized = 'true';
+    },
+
     timerManager: {
         timers: {}, // { timer_name: { timerId: 123, endTime: 167... } }
         
@@ -5837,6 +5916,7 @@ const appLogic = {
             console.error("Marked.jsライブラリが読み込まれていません！");
         }
         elements.appVersionSpan.textContent = APP_VERSION;
+        this.setupInputPresetPopup();
         window.addEventListener('beforeinstallprompt', (e) => e.preventDefault());
         
         // デバッグ用ヘルパー
