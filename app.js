@@ -9134,10 +9134,11 @@ const appLogic = {
             state.currentPersistentMemory = chat.persistentMemory;
         }
         await dbUtils.saveChat();
-    
+
         state.currentScene = state.currentPersistentMemory?.scene_stack?.slice(-1)[0] || null;
         state.currentStyleProfiles = state.currentPersistentMemory?.style_profiles || {};
-    
+        this.updateCharacterProfileButtonVisibility();
+
         return { toolResults, containsTerminalAction, search_results: aggregatedSearchResults, internalUiActions };
     },
 
@@ -9567,11 +9568,7 @@ const appLogic = {
         const userMessage = state.currentMessages[index];
         if (!userMessage || userMessage.role !== 'user') return;
     
-        const messageContentPreview = userMessage.content.substring(0, 30) + "...";
-        const confirmed = await uiUtils.showCustomConfirm(`「${messageContentPreview}」から再生成しますか？\n(これより未来の会話履歴は削除され、既存の応答は別候補として保持されます)`);
-    
-        if (confirmed) {
-            uiUtils.setSendingState(true);
+        uiUtils.setSendingState(true);
     
             let originalResponses = [];
             // 保留中のカスケード応答があれば、それを使用する
@@ -9702,7 +9699,6 @@ const appLogic = {
                     });
                 }
             }
-        }
     },    
 
     // --- カスケード応答操作 ---
