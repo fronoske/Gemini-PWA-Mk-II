@@ -1965,7 +1965,7 @@ createMessageElement(role, content, index, isStreamingPlaceholder = false, casca
                     const pre = document.createElement('pre'); pre.textContent = content; contentDiv.appendChild(pre);
                 }
             } else if (role === 'error') {
-                 const p = document.createElement('p'); p.textContent = content; contentDiv.appendChild(p);
+                 const p = document.createElement('p'); p.textContent = content; p.style.whiteSpace = 'pre-line'; contentDiv.appendChild(p);
             }
         } catch (e) {
              console.error("Markdownパースエラー:", e);
@@ -3728,6 +3728,214 @@ const apiUtils = {
         return bedrockTools;
     },
 
+    parseRetryAfterHeader(value) {
+        if (!value) return null;
+        const trimmed = value.trim();
+        const seconds = Number(trimmed);
+        if (Number.isFinite(seconds)) {
+            return Math.max(0, Math.ceil(seconds));
+        }
+
+        const retryAt = Date.parse(trimmed);
+        if (!Number.isNaN(retryAt)) {
+            return Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
+        }
+
+        return null;
+    },
+
+    parseGoogleRetryDelay(value) {
+        if (!value) return null;
+        if (typeof value === 'string') {
+            const match = value.match(/^(\d+(?:\.\d+)?)s$/);
+            return match ? Math.max(0, Math.ceil(Number(match[1]))) : null;
+        }
+        if (typeof value === 'object') {
+            const seconds = Number(value.seconds || 0);
+            const nanos = Number(value.nanos || 0);
+            const totalSeconds = seconds + (nanos / 1_000_000_000);
+            return Number.isFinite(totalSeconds) ? Math.max(0, Math.ceil(totalSeconds)) : null;
+        }
+        return null;
+    },
+
+    parseRetryDelayFromMessage(message) {
+        if (!message) return null;
+        const match = String(message).match(/retry\s+in\s+(\d+(?:\.\d+)?)s/i);
+        return match ? Math.max(0, Math.ceil(Number(match[1]))) : null;
+    },
+
+    inferRateLimitDimension(text) {
+        const normalized = (text || '').toLowerCase();
+        if (/tokens?\s+per\s+day|token.*daily|tpd|tokens?perday|tokens?_per_day/.test(normalized)) {
+            return 'TPD (1日あたりのトークン数)';
+        }
+        if (/requests?\s+per\s+day|request.*daily|rpd|requests?perday|requests?_per_day/.test(normalized)) {
+            return 'RPD (1日あたりのリクエスト数)';
+        }
+        if (/tokens?\s+per\s+minute|tpm|tokens?perminute|tokens?_per_minute/.test(normalized)) {
+            return 'TPM (1分あたりの入力トークン数)';
+        }
+        if (/requests?\s+per\s+minute|rpm|requests?perminute|requests?_per_minute/.test(normalized)) {
+            return 'RPM (1分あたりのリクエスト数)';
+        }
+        if (/images?\s+per\s+minute|ipm|images?perminute|images?_per_minute/.test(normalized)) {
+            return 'IPM (1分あたりの画像数)';
+        }
+        return '不明 (レスポンス本文からは判定できません)';
+    },
+
+    getZonedDateParts(date, timeZone) {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23'
+        }).formatToParts(date);
+        const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+        return {
+            year: Number(values.year),
+            month: Number(values.month),
+            day: Number(values.day),
+            hour: Number(values.hour),
+            minute: Number(values.minute),
+            second: Number(values.second)
+        };
+    },
+
+    getNextPacificMidnightText() {
+        const timeZone = 'America/Los_Angeles';
+        const now = new Date();
+        const pacificNow = this.getZonedDateParts(now, timeZone);
+        const nextPacificDate = new Date(Date.UTC(pacificNow.year, pacificNow.month - 1, pacificNow.day) + 24 * 60 * 60 * 1000);
+        const target = {
+            year: nextPacificDate.getUTCFullYear(),
+            month: nextPacificDate.getUTCMonth() + 1,
+            day: nextPacificDate.getUTCDate(),
+            hour: 0,
+            minute: 0,
+            second: 0
+        };
+
+        const utcGuess = Date.UTC(target.year, target.month - 1, target.day, target.hour, target.minute, target.second);
+        const guessedPacific = this.getZonedDateParts(new Date(utcGuess), timeZone);
+        const guessedPacificAsUtc = Date.UTC(
+            guessedPacific.year,
+            guessedPacific.month - 1,
+            guessedPacific.day,
+            guessedPacific.hour,
+            guessedPacific.minute,
+            guessedPacific.second
+        );
+        const targetAsUtc = Date.UTC(target.year, target.month - 1, target.day, target.hour, target.minute, target.second);
+        const resetAt = new Date(utcGuess + (targetAsUtc - guessedPacificAsUtc));
+
+        return `太平洋時間の次の午前0時 (${resetAt.toLocaleString('ja-JP')})`;
+    },
+
+    formatRateLimitValue(dimension, quotaValue) {
+        if (!quotaValue) return null;
+        if (dimension.startsWith('RPD')) return `${quotaValue}回 / 日`;
+        if (dimension.startsWith('RPM')) return `${quotaValue}回 / 分`;
+        if (dimension.startsWith('TPD')) return `${quotaValue}トークン / 日`;
+        if (dimension.startsWith('TPM')) return `${quotaValue}トークン / 分`;
+        if (dimension.startsWith('IPM')) return `${quotaValue}画像 / 分`;
+        return `${quotaValue}`;
+    },
+
+    formatRateLimitScope(quotaId) {
+        if (!quotaId) return null;
+        const scopeParts = [];
+        if (/PerProjectPerModel/i.test(quotaId)) {
+            scopeParts.push('プロジェクト・モデル単位');
+        } else {
+            if (/PerProject/i.test(quotaId)) scopeParts.push('プロジェクト単位');
+            if (/PerModel/i.test(quotaId)) scopeParts.push('モデル単位');
+        }
+        if (/FreeTier/i.test(quotaId)) scopeParts.push('Free Tier');
+        return scopeParts.length > 0 ? scopeParts.join(' / ') : null;
+    },
+
+    buildGeminiRateLimitDetails(errorData, response) {
+        const errorBody = errorData?.error || {};
+        const details = Array.isArray(errorBody.details) ? errorBody.details : [];
+        const retryInfo = details.find(detail => String(detail['@type'] || '').includes('google.rpc.RetryInfo'));
+        const quotaFailure = details.find(detail => String(detail['@type'] || '').includes('google.rpc.QuotaFailure'));
+
+        const retryAfterSeconds = this.parseRetryAfterHeader(response.headers.get('retry-after'));
+        const retryInfoSeconds = this.parseGoogleRetryDelay(retryInfo?.retryDelay);
+        const messageRetrySeconds = this.parseRetryDelayFromMessage(errorBody.message);
+        const retrySecondsCandidates = [retryAfterSeconds, retryInfoSeconds, messageRetrySeconds].filter(value => value !== null);
+        const retrySeconds = retrySecondsCandidates.length > 0 ? Math.max(...retrySecondsCandidates) : null;
+
+        const violations = Array.isArray(quotaFailure?.violations) ? quotaFailure.violations : [];
+        const primaryViolation = violations[0] || {};
+        const quotaLines = violations.map(violation => {
+            const fields = [
+                violation.quotaMetric && `metric=${violation.quotaMetric}`,
+                violation.quotaId && `id=${violation.quotaId}`,
+                violation.quotaValue && `limit=${violation.quotaValue}`,
+                violation.quotaDimensions && `dimensions=${JSON.stringify(violation.quotaDimensions)}`
+            ].filter(Boolean);
+            return fields.join(', ');
+        }).filter(Boolean);
+
+        const dimensionText = [
+            errorBody.message,
+            ...quotaLines
+        ].join('\n');
+        const dimension = this.inferRateLimitDimension(dimensionText);
+
+        let retryText = 'レスポンスに待機秒数が含まれていません。';
+        if (retrySeconds !== null) {
+            const retryAt = new Date(Date.now() + retrySeconds * 1000);
+            retryText = `約${retrySeconds}秒後 (${retryAt.toLocaleString('ja-JP')})`;
+        }
+
+        const dailyResetText = (dimension.startsWith('RPD') || dimension.startsWith('TPD'))
+            ? this.getNextPacificMidnightText()
+            : null;
+        const modelName = primaryViolation.quotaDimensions?.model || state.settings.modelName || DEFAULT_MODEL;
+        const limitText = this.formatRateLimitValue(dimension, primaryViolation.quotaValue);
+        const scopeText = this.formatRateLimitScope(primaryViolation.quotaId);
+
+        const lines = [
+            'レート制限に達しました。',
+            '',
+            `対象: ${modelName}`,
+            `制限: ${dimension}`
+        ];
+
+        if (limitText) {
+            lines.push(`上限: ${limitText}`);
+        }
+        if (scopeText) {
+            lines.push(`範囲: ${scopeText}`);
+        }
+
+        lines.push('');
+        lines.push(`サーバー推奨の再試行目安: ${retryText}`);
+        if (dailyResetText) {
+            lines.push(`日次上限のリセット: ${dailyResetText}`);
+        }
+        lines.push('');
+        lines.push('詳細:');
+        if (primaryViolation.quotaId) {
+            lines.push(primaryViolation.quotaId);
+        }
+        if (quotaLines.length > 0) {
+            lines.push(`QuotaFailure: ${quotaLines.join(' / ')}`);
+        }
+        lines.push('https://ai.google.dev/gemini-api/docs/rate-limits');
+        lines.push('https://ai.dev/rate-limit');
+
+        return lines.join('\n');
+    },
+
     // Gemini APIを呼び出す
     async callGeminiApi(messagesForApi, generationConfig, systemInstruction, tools = null, forceCalling = false, signal = null) {
         console.log(`[Debug] callGeminiApi: 現在の設定値を確認します。`, {
@@ -3858,6 +4066,9 @@ const apiUtils = {
                     }
                 } catch (e) {
                     console.error("APIエラーレスポンスボディのパース失敗:", e);
+                }
+                if (response.status === 429) {
+                    errorMsg = this.buildGeminiRateLimitDetails(errorData, response);
                 }
                 const error = new Error(errorMsg);
                 error.status = response.status;
