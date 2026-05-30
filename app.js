@@ -8713,7 +8713,7 @@ const appLogic = {
 
         const scrollLimit = mainContent.scrollTop + (mainContent.clientHeight / 2);
         const chunkSize = Math.max(1, Math.min(12, Math.ceil(content.length / 320)));
-        const revealDelayMs = 36;
+        const revealDelayMs = 108;
         let displayedLength = 0;
         let revealStoppedByScrollLimit = false;
 
