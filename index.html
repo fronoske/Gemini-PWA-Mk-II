@@ -241,7 +241,18 @@
 
                     <div id="gemini-api-key-container">
                         <label for="api-key">Gemini APIキー:</label>
-                        <input type="password" autocomplete="new-password" id="api-key" placeholder="APIキーを入力" aria-label="Gemini APIキー">
+                        <div class="api-key-input-row">
+                            <input type="password" autocomplete="new-password" id="api-key" placeholder="APIキーを入力" aria-label="Gemini APIキー">
+                            <button id="save-api-key-preset-btn" class="settings-reset-button" type="button">保存</button>
+                        </div>
+                        <label for="api-key-preset-select">保存済みAPIキー:</label>
+                        <select id="api-key-preset-select" aria-label="保存済みAPIキー">
+                            <option value="">保存済みAPIキーを選択</option>
+                        </select>
+                        <details id="api-key-presets-details" class="api-key-presets-details">
+                            <summary>保存済みAPIキー一覧</summary>
+                            <div id="api-key-presets-list" class="api-key-presets-list"></div>
+                        </details>
                     </div>
 
                     <div id="zai-api-key-container" class="hidden">

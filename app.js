@@ -283,6 +283,9 @@ try {
         apiProviderSelect: document.getElementById('api-provider'),
         apiProviderRow: document.getElementById('api-provider-row'),
         apiKeyInput: document.getElementById('api-key'),
+        saveApiKeyPresetBtn: document.getElementById('save-api-key-preset-btn'),
+        apiKeyPresetSelect: document.getElementById('api-key-preset-select'),
+        apiKeyPresetsList: document.getElementById('api-key-presets-list'),
         zaiApiKeyInput: document.getElementById('zai-api-key'),
         geminiApiKeyContainer: document.getElementById('gemini-api-key-container'),
         zaiApiKeyContainer: document.getElementById('zai-api-key-container'),
@@ -520,6 +523,7 @@ const state = {
     settings: {
         apiProvider: 'gemini', // 'gemini' | 'zai' | 'bedrock' | 'openrouter'
         apiKey: '',
+        apiKeyPresets: [],
         zaiApiKey: '',
         openrouterApiKey: '',
         bedrockAccessKey: '',
@@ -900,7 +904,7 @@ const dbUtils = {
                             });
 
                                 const profileSettingKeys = [
-                                'apiProvider', 'apiKey', 'zaiApiKey', 'bedrockAccessKey', 'bedrockSecretKey', 'bedrockRegion', 
+                                'apiProvider', 'apiKey', 'apiKeyPresets', 'zaiApiKey', 'bedrockAccessKey', 'bedrockSecretKey', 'bedrockRegion', 
                                 'modelName', 'systemPrompt', 'temperature', 'maxTokens', 'topK', 'topP',
                                 'presencePenalty', 'frequencyPenalty', 'thinkingBudget', 'includeThoughts',
                                 'enableThoughtTranslation', 'thoughtTranslationModel', 'dummyUser',
@@ -2557,6 +2561,7 @@ createMessageElement(role, content, index, isStreamingPlaceholder = false, casca
             appLogic.updateModelOptions(provider);
         }
         elements.apiKeyInput.value = state.settings.apiKey || '';
+        appLogic.renderApiKeyPresets();
         if (elements.zaiApiKeyInput) {
             elements.zaiApiKeyInput.value = state.settings.zaiApiKey || '';
         }
@@ -5286,6 +5291,140 @@ const appLogic = {
         }
     },
 
+    getApiKeyPresets() {
+        return Array.isArray(state.settings.apiKeyPresets) ? state.settings.apiKeyPresets : [];
+    },
+
+    async saveApiKeyPresets(presets) {
+        state.settings.apiKeyPresets = presets;
+        if (state.activeProfile?.settings) {
+            state.activeProfile.settings.apiKeyPresets = presets;
+            await dbUtils.updateProfile(state.activeProfile);
+            this.markAsDirtyAndSchedulePush('structural');
+        }
+        this.renderApiKeyPresets();
+    },
+
+    renderApiKeyPresets() {
+        const select = elements.apiKeyPresetSelect;
+        const list = elements.apiKeyPresetsList;
+        if (!select || !list) return;
+
+        const presets = this.getApiKeyPresets();
+        select.innerHTML = '';
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = presets.length > 0 ? '保存済みAPIキーを選択' : '保存済みAPIキーなし';
+        select.appendChild(placeholder);
+        select.disabled = presets.length === 0;
+
+        presets.forEach(preset => {
+            const option = document.createElement('option');
+            option.value = preset.id;
+            option.textContent = preset.name;
+            select.appendChild(option);
+        });
+
+        list.innerHTML = '';
+        if (presets.length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'api-key-presets-empty';
+            empty.textContent = '保存済みAPIキーはありません。';
+            list.appendChild(empty);
+            return;
+        }
+
+        presets.forEach(preset => {
+            const item = document.createElement('div');
+            item.className = 'api-key-preset-item';
+
+            const info = document.createElement('div');
+            info.className = 'api-key-preset-info';
+
+            const name = document.createElement('div');
+            name.className = 'api-key-preset-name';
+            name.textContent = preset.name;
+
+            const key = document.createElement('div');
+            key.className = 'api-key-preset-key';
+            key.textContent = preset.key;
+
+            info.appendChild(name);
+            info.appendChild(key);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'settings-delete-button api-key-preset-delete-btn';
+            deleteBtn.textContent = '削除';
+            deleteBtn.onclick = () => this.deleteApiKeyPreset(preset.id);
+
+            item.appendChild(info);
+            item.appendChild(deleteBtn);
+            list.appendChild(item);
+        });
+    },
+
+    async saveCurrentApiKeyAsPreset() {
+        const apiKey = elements.apiKeyInput?.value.trim() || '';
+        if (!apiKey) {
+            await uiUtils.showCustomAlert("保存するAPIキーを入力してください。");
+            return;
+        }
+
+        const presetName = await uiUtils.showCustomPrompt("APIキーの名前を入力してください:", "");
+        if (!presetName || !presetName.trim()) return;
+
+        const name = presetName.trim();
+        const presets = [...this.getApiKeyPresets()];
+        const existingIndex = presets.findIndex(preset => preset.name === name);
+        if (existingIndex !== -1) {
+            const confirmed = await uiUtils.showCustomConfirm(`「${name}」は既に存在します。上書きしますか？`);
+            if (!confirmed) return;
+            presets[existingIndex] = {
+                ...presets[existingIndex],
+                key: apiKey,
+                updatedAt: Date.now()
+            };
+        } else {
+            presets.push({
+                id: (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `api-key-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+                name,
+                key: apiKey,
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+            });
+        }
+
+        await this.saveApiKeyPresets(presets);
+        await uiUtils.showCustomAlert(`APIキー「${name}」を保存しました。`);
+    },
+
+    async applyApiKeyPreset(presetId) {
+        if (!presetId) return;
+        const preset = this.getApiKeyPresets().find(item => item.id === presetId);
+        if (!preset) return;
+
+        elements.apiKeyInput.value = preset.key;
+        state.settings.apiKey = preset.key;
+        if (state.activeProfile?.settings) {
+            state.activeProfile.settings.apiKey = preset.key;
+            await dbUtils.updateProfile(state.activeProfile);
+            this.markAsDirtyAndSchedulePush('structural');
+        }
+    },
+
+    async deleteApiKeyPreset(presetId) {
+        const preset = this.getApiKeyPresets().find(item => item.id === presetId);
+        if (!preset) return;
+
+        const confirmed = await uiUtils.showCustomConfirm(`APIキー「${preset.name}」を削除しますか？`);
+        if (!confirmed) return;
+
+        const presets = this.getApiKeyPresets().filter(item => item.id !== presetId);
+        await this.saveApiKeyPresets(presets);
+    },
+
     getCurrentUiSettings() {
         const settings = {};
         const stringKeys = ['apiProvider', 'apiKey', 'zaiApiKey', 'openrouterApiKey', 'bedrockAccessKey', 'bedrockSecretKey', 'bedrockRegion', 'modelName', 'dummyUser', 'dummyModel', 'additionalModels', 'historySortOrder', 'fontFamily', 'proofreadingModelName', 'proofreadingSystemInstruction', 'googleSearchApiKey', 'googleSearchEngineId', 'headerColor', 'thoughtTranslationModel', 'summaryModelName', 'summarySystemPrompt'];
@@ -5334,6 +5473,8 @@ const appLogic = {
             const element = elements[key + 'Checkbox'] || elements[key + 'Toggle'];
             if (element) settings[key] = element.checked;
         });
+
+        settings.apiKeyPresets = this.getApiKeyPresets();
 
         console.log("[Profile] 現在のUIから設定を取得しました:", settings);
         return settings;
@@ -7096,6 +7237,17 @@ const appLogic = {
         for (const key in settingsMap) {
             const { element, event, onUpdate, getValue } = settingsMap[key];
             setupInstantSave(element, key, event, onUpdate, getValue);
+        }
+
+        if (elements.saveApiKeyPresetBtn) {
+            elements.saveApiKeyPresetBtn.addEventListener('click', () => this.saveCurrentApiKeyAsPreset());
+        }
+
+        if (elements.apiKeyPresetSelect) {
+            elements.apiKeyPresetSelect.addEventListener('change', async () => {
+                await this.applyApiKeyPreset(elements.apiKeyPresetSelect.value);
+                elements.apiKeyPresetSelect.value = '';
+            });
         }
     
         // --- OpenRouterモデル名テキストボックスのイベントリスナー ---
