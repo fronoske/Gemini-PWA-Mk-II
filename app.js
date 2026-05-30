@@ -8619,6 +8619,48 @@ const appLogic = {
         }
     },
 
+    _replaceFinalResponseMessageElement(messageIndex, finalMessage, lockedScrollTop) {
+        const mainContent = elements.chatScreen.querySelector('.main-content');
+        state.currentMessages[messageIndex] = finalMessage;
+
+        const currentElement = elements.messageContainer.querySelector(`.message[data-index="${messageIndex}"]`);
+        let cascadeInfo = null;
+        if (finalMessage.isCascaded && finalMessage.siblingGroupId) {
+            const siblings = state.currentMessages.filter(m => m.siblingGroupId === finalMessage.siblingGroupId && !m.isHidden);
+            const currentIndexInGroup = siblings.findIndex(m => m === finalMessage);
+            cascadeInfo = {
+                currentIndex: currentIndexInGroup + 1,
+                total: siblings.length,
+                siblingGroupId: finalMessage.siblingGroupId
+            };
+        }
+
+        const replacementElement = uiUtils.createMessageElement(
+            finalMessage.role,
+            finalMessage.content,
+            messageIndex,
+            false,
+            cascadeInfo,
+            finalMessage.attachments
+        );
+
+        if (!currentElement || !replacementElement) {
+            uiUtils.renderChatMessages();
+            requestAnimationFrame(() => {
+                if (mainContent) mainContent.scrollTop = lockedScrollTop;
+            });
+            return;
+        }
+
+        currentElement.replaceWith(replacementElement);
+        if (window.Prism) {
+            replacementElement.querySelectorAll('pre code').forEach((block) => {
+                Prism.highlightElement(block);
+            });
+        }
+        if (mainContent) mainContent.scrollTop = lockedScrollTop;
+    },
+
     async _revealFinalResponseProgressively(messageIndex, finalMessage) {
         const content = finalMessage?.content || '';
         if (!state.settings.autoScroll) {
@@ -8655,7 +8697,8 @@ const appLogic = {
         }
 
         const scrollLimit = mainContent.scrollTop + (mainContent.clientHeight / 2);
-        const chunkSize = Math.max(2, Math.min(24, Math.ceil(content.length / 240)));
+        const chunkSize = Math.max(1, Math.min(12, Math.ceil(content.length / 320)));
+        const revealDelayMs = 12;
         let displayedLength = 0;
         let revealStoppedByScrollLimit = false;
 
@@ -8677,14 +8720,18 @@ const appLogic = {
                 revealStoppedByScrollLimit = true;
                 break;
             }
+
+            if (displayedLength < content.length) {
+                await sleep(revealDelayMs);
+            }
         }
 
         const lockedScrollTop = mainContent.scrollTop;
         state.currentMessages[messageIndex] = finalMessage;
-        uiUtils.renderChatMessages();
+        this._renderProgressiveRevealContent(contentDiv, content);
 
         requestAnimationFrame(() => {
-            mainContent.scrollTop = lockedScrollTop;
+            this._replaceFinalResponseMessageElement(messageIndex, finalMessage, lockedScrollTop);
             if (revealStoppedByScrollLimit) {
                 console.log("[ProgressiveReveal] 画面半分のスクロール上限に達したため、残りを一括描画しました。");
             }
