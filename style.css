@@ -659,11 +659,13 @@ input[type="color"]::-webkit-color-swatch { border: 1px solid var(--border-prima
 input[type="color"]::-moz-color-swatch { border: 1px solid var(--border-primary); border-radius: 4px; }
 .settings-reset-button { background-color: var(--bg-button-action); color: var(--text-light); padding: 4px 10px; font-size: 12px; border-radius: 4px; margin-left: auto; }
 .settings-reset-button:hover { background-color: var(--bg-button-action-hover); }
+.settings-save-button { background-color: var(--bg-button-save); color: var(--text-light); padding: 4px 10px; font-size: 12px; border-radius: 4px; }
+.settings-save-button:hover { background-color: var(--bg-button-save-hover); }
 .settings-delete-button { background-color: var(--bg-button-delete); color: var(--text-light); padding: 4px 10px; font-size: 12px; border-radius: 4px; }
 .settings-delete-button:hover { background-color: var(--bg-button-delete-hover); }
 .api-key-input-row { display: flex; align-items: center; gap: 8px; }
 .api-key-input-row input { flex: 1; min-width: 0; }
-.api-key-input-row .settings-reset-button { flex-shrink: 0; margin-left: 0; }
+.api-key-input-row .settings-save-button { flex-shrink: 0; margin-left: 0; }
 .api-key-presets-details { margin-top: 10px; font-size: 13px; color: var(--text-secondary); }
 .api-key-presets-details summary { cursor: pointer; user-select: none; color: var(--text-primary); }
 .api-key-presets-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
