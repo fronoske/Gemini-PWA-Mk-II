@@ -8600,8 +8600,102 @@ const appLogic = {
         return finalAggregatedMessage;
     },
 
+    _renderProgressiveRevealContent(contentDiv, text) {
+        try {
+            if (typeof marked !== 'undefined') {
+                contentDiv.innerHTML = marked.parse(text || '');
+            } else {
+                const pre = document.createElement('pre');
+                pre.textContent = text || '';
+                contentDiv.innerHTML = '';
+                contentDiv.appendChild(pre);
+            }
+        } catch (error) {
+            console.error("逐次描画中のMarkdownパースエラー:", error);
+            const pre = document.createElement('pre');
+            pre.textContent = text || '';
+            contentDiv.innerHTML = '';
+            contentDiv.appendChild(pre);
+        }
+    },
+
+    async _revealFinalResponseProgressively(messageIndex, finalMessage) {
+        const content = finalMessage?.content || '';
+        if (!state.settings.autoScroll) {
+            state.currentMessages[messageIndex] = finalMessage;
+            uiUtils.renderChatMessages();
+            return false;
+        }
+        if (!content) {
+            state.currentMessages[messageIndex] = finalMessage;
+            uiUtils.renderChatMessages();
+            return true;
+        }
+
+        const revealMessage = {
+            ...finalMessage,
+            content: '',
+            groundingMetadata: null,
+            executedFunctions: [],
+            generated_videos: [],
+            imageIds: []
+        };
+        state.currentMessages[messageIndex] = revealMessage;
+        uiUtils.renderChatMessages();
+
+        await new Promise(resolve => requestAnimationFrame(resolve));
+
+        const mainContent = elements.chatScreen.querySelector('.main-content');
+        const messageElement = elements.messageContainer.querySelector(`.message[data-index="${messageIndex}"]`);
+        const contentDiv = messageElement?.querySelector('.message-content');
+        if (!mainContent || !contentDiv) {
+            state.currentMessages[messageIndex] = finalMessage;
+            uiUtils.renderChatMessages();
+            return true;
+        }
+
+        const scrollLimit = mainContent.scrollTop + (mainContent.clientHeight / 2);
+        const chunkSize = Math.max(2, Math.min(24, Math.ceil(content.length / 240)));
+        let displayedLength = 0;
+        let revealStoppedByScrollLimit = false;
+
+        while (displayedLength < content.length) {
+            displayedLength = Math.min(content.length, displayedLength + chunkSize);
+            const partialContent = content.slice(0, displayedLength);
+            revealMessage.content = partialContent;
+            this._renderProgressiveRevealContent(contentDiv, partialContent);
+
+            await new Promise(resolve => requestAnimationFrame(resolve));
+
+            const maxScrollTop = Math.max(0, mainContent.scrollHeight - mainContent.clientHeight);
+            const nextScrollTop = Math.min(maxScrollTop, scrollLimit);
+            if (nextScrollTop > mainContent.scrollTop) {
+                mainContent.scrollTop = nextScrollTop;
+            }
+
+            if (displayedLength < content.length && mainContent.scrollTop >= scrollLimit - 1) {
+                revealStoppedByScrollLimit = true;
+                break;
+            }
+        }
+
+        const lockedScrollTop = mainContent.scrollTop;
+        state.currentMessages[messageIndex] = finalMessage;
+        uiUtils.renderChatMessages();
+
+        requestAnimationFrame(() => {
+            mainContent.scrollTop = lockedScrollTop;
+            if (revealStoppedByScrollLimit) {
+                console.log("[ProgressiveReveal] 画面半分のスクロール上限に達したため、残りを一括描画しました。");
+            }
+        });
+
+        return true;
+    },
+
     
     async handleSend() {
+        let suppressFinalAutoScroll = false;
         state.pendingCascadeResponses = null; // 保留中のカスケードデータをクリア
         if (state.isSending) { return; }
         if (state.editingMessageIndex !== null) { await uiUtils.showCustomAlert("他のメッセージを編集中です。"); return; }
@@ -8669,9 +8763,7 @@ const appLogic = {
             const newMessages = await this._internalHandleSend(historyForApi, generationConfig, systemInstruction);
             
             const finalAggregatedMessage = this._aggregateMessages(newMessages);
-            state.currentMessages[modelMessageIndex] = finalAggregatedMessage;
-
-            uiUtils.renderChatMessages();
+            suppressFinalAutoScroll = await this._revealFinalResponseProgressively(modelMessageIndex, finalAggregatedMessage);
 
             // モデルの応答をDBに保存
             await dbUtils.saveChat(null, null, { skipPush: true });
@@ -8704,7 +8796,7 @@ const appLogic = {
             // 処理が完了したこのタイミングで、安全に同期処理をトリガーする
             this.markAsDirtyAndSchedulePush('message');
 
-            if (state.settings.autoScroll) {
+            if (state.settings.autoScroll && !suppressFinalAutoScroll) {
                 requestAnimationFrame(() => {
                     this.scrollToBottom();
                 });
@@ -9569,6 +9661,7 @@ const appLogic = {
         if (!userMessage || userMessage.role !== 'user') return;
     
         uiUtils.setSendingState(true);
+        let suppressFinalAutoScroll = false;
     
             let originalResponses = [];
             // 保留中のカスケード応答があれば、それを使用する
@@ -9661,8 +9754,8 @@ const appLogic = {
                 newAggregatedMessage.siblingGroupId = siblingGroupId;
 
                 state.currentMessages.splice(modelMessageIndex, 1, ...finalOriginalResponses, newAggregatedMessage);
-                uiUtils.renderChatMessages();
-                this.scrollToBottom();
+                const newAggregatedMessageIndex = modelMessageIndex + finalOriginalResponses.length;
+                suppressFinalAutoScroll = await this._revealFinalResponseProgressively(newAggregatedMessageIndex, newAggregatedMessage);
                 await dbUtils.saveChat();
     
             } catch(error) {
@@ -9693,7 +9786,7 @@ const appLogic = {
             } finally {
                 uiUtils.setSendingState(false);
                 state.abortController = null; 
-                if (state.settings.autoScroll) {
+                if (state.settings.autoScroll && !suppressFinalAutoScroll) {
                     requestAnimationFrame(() => {
                         this.scrollToBottom();
                     });
