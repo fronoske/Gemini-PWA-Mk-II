@@ -8619,7 +8619,7 @@ const appLogic = {
         }
     },
 
-    _replaceFinalResponseMessageElement(messageIndex, finalMessage, lockedScrollTop) {
+    _finalizeProgressiveRevealMessageElement(messageIndex, finalMessage, lockedScrollTop) {
         const mainContent = elements.chatScreen.querySelector('.main-content');
         state.currentMessages[messageIndex] = finalMessage;
 
@@ -8652,9 +8652,24 @@ const appLogic = {
             return;
         }
 
-        currentElement.replaceWith(replacementElement);
+        const currentContentDiv = currentElement.querySelector('.message-content');
+        const replacementContentDiv = replacementElement.querySelector('.message-content');
+        if (currentContentDiv && replacementContentDiv && currentContentDiv.innerHTML !== replacementContentDiv.innerHTML) {
+            currentContentDiv.innerHTML = replacementContentDiv.innerHTML;
+        }
+
+        const preservedContentDiv = currentContentDiv || replacementContentDiv;
+        currentElement.replaceChildren();
+        Array.from(replacementElement.childNodes).forEach((node) => {
+            if (node.classList?.contains('message-content') && preservedContentDiv) {
+                currentElement.appendChild(preservedContentDiv);
+            } else {
+                currentElement.appendChild(node);
+            }
+        });
+
         if (window.Prism) {
-            replacementElement.querySelectorAll('pre code').forEach((block) => {
+            currentElement.querySelectorAll('pre code').forEach((block) => {
                 Prism.highlightElement(block);
             });
         }
@@ -8698,7 +8713,7 @@ const appLogic = {
 
         const scrollLimit = mainContent.scrollTop + (mainContent.clientHeight / 2);
         const chunkSize = Math.max(1, Math.min(12, Math.ceil(content.length / 320)));
-        const revealDelayMs = 12;
+        const revealDelayMs = 36;
         let displayedLength = 0;
         let revealStoppedByScrollLimit = false;
 
@@ -8731,7 +8746,7 @@ const appLogic = {
         this._renderProgressiveRevealContent(contentDiv, content);
 
         requestAnimationFrame(() => {
-            this._replaceFinalResponseMessageElement(messageIndex, finalMessage, lockedScrollTop);
+            this._finalizeProgressiveRevealMessageElement(messageIndex, finalMessage, lockedScrollTop);
             if (revealStoppedByScrollLimit) {
                 console.log("[ProgressiveReveal] 画面半分のスクロール上限に達したため、残りを一括描画しました。");
             }
